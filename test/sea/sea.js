@@ -1,4 +1,4 @@
-﻿var root;
+var root;
 var Gun;
 (function(){
   var env;
@@ -750,6 +750,171 @@ describe('SEA', function(){
 
   });
 
+  describe.skip('Frozen', function () {
+    it('Across spaces', function(done){
+      var gun = Gun();
+      var user = gun.user();
+
+      user.create('alice/as', 'password');
+      
+      gun.on('auth', async function(){
+
+        user.put({name: "Alice", country: "USA"});
+
+        var data = "hello world";
+        var hash = await SEA.work(data, null, null, {name: "SHA-256"});
+        gun.get('#users').get(hash).put(data);
+
+        console.log(1);
+        gun.get('#users').map()/*.get('country')*/.on(data => console.log(data));
+
+      });
+    });
+  });
+})
+
+
+  describe('SEA.share', function() {
+    it('shares with multiple recipients (string data)', function(done){(async function(){
+      var alice = await SEA.pair();
+      var bob = await SEA.pair();
+      var carol = await SEA.pair();
+      var capsule = await SEA.share('top secret', alice, [bob, carol]);
+      expect(capsule).to.be.ok();
+      expect(capsule.e).to.be(alice.epub);
+      expect(Object.keys(capsule.s)).to.have.length(2);
+      var b = await SEA.unshare(capsule, bob);
+      expect(b).to.be('top secret');
+      var c = await SEA.unshare(capsule, carol);
+      expect(c).to.be('top secret');
+      done();
+    }())})
+
+    it('shares objects and JSON-serializable data', function(done){(async function(){
+      var alice = await SEA.pair();
+      var bob = await SEA.pair();
+      var data = { msg: 'hello', n: 42, list: [1, 2, 3], nested: { deep: true } };
+      var capsule = await SEA.share(data, alice, bob);
+      var round = await SEA.unshare(capsule, bob);
+      expect(round).to.be.eql(data);
+      // capsule itself must be storable (JSON-safe) so it can live in a Gun graph
+      expect(JSON.parse(JSON.stringify(capsule)).c).to.be(capsule.c);
+      done();
+    }())})
+
+    it('accepts bare epub strings as recipients', function(done){(async function(){
+      var alice = await SEA.pair();
+      var bob = await SEA.pair();
+      var capsule = await SEA.share('for bob only', alice, bob.epub);
+      expect(capsule.s[bob.epub]).to.be.ok();
+      expect(await SEA.unshare(capsule, bob)).to.be('for bob only');
+      done();
+    }())})
+
+    it('blocks recipients without a key slot', function(done){(async function(){
+      var alice = await SEA.pair();
+      var bob = await SEA.pair();
+      var eve = await SEA.pair();
+      var capsule = await SEA.share('secret', alice, bob);
+      expect(await SEA.unshare(capsule, eve)).to.be(undefined);
+      done();
+    }())})
+
+    it('blocks tampered capsules', function(done){(async function(){
+      var alice = await SEA.pair();
+      var bob = await SEA.pair();
+      var capsule = await SEA.share('secret', alice, bob);
+      var tampered = { e: capsule.e, s: capsule.s, c: capsule.c.slice(0, 10) + capsule.c.slice(11) };
+      expect(await SEA.unshare(tampered, bob)).to.be(undefined);
+      done();
+    }())})
+
+    it('supports callback style', function(done){
+      SEA.pair(function(alice){
+      SEA.pair(function(bob){
+      SEA.share('cb secret', alice, bob, function(capsule){
+      SEA.unshare(capsule, bob, function(data){
+      expect(data).to.be('cb secret');
+      done();
+      });});});});
+    })
+
+    it('supports self-share (sender as recipient)', function(done){(async function(){
+      var alice = await SEA.pair();
+      var capsule = await SEA.share('to myself', alice, alice);
+      expect(await SEA.unshare(capsule, alice)).to.be('to myself');
+      done();
+    }())})
+  });
+
+  describe('SEA.timelock', function() {
+    it('locks and unlocks after solving the puzzle (string data)', function(done){(async function(){
+      var capsule = await SEA.timelock('time secret', null, null, { rounds: 1000, until: Date.now() + 86400000 });
+      expect(capsule).to.be.ok();
+      expect(capsule.rounds).to.be(1000);
+      expect(capsule.until).to.be.above(Date.now());
+      expect(capsule.seed).to.be.ok();
+      expect(capsule.c.indexOf('SEA')).to.be(0); // ciphertext, not plaintext
+      expect(await SEA.timelock.unlock(capsule)).to.be('time secret');
+      done();
+    }())})
+
+    it('locks and unlocks object data', function(done){(async function(){
+      var data = { msg: 'hello', n: 42, list: [1, 2, 3] };
+      var capsule = await SEA.timelock(data, null, null, { rounds: 1000 });
+      var round = await SEA.timelock.unlock(capsule);
+      expect(round).to.be.eql(data);
+      done();
+    }())})
+
+    it('capsule contains no key material', function(done){(async function(){
+      var capsule = await SEA.timelock('no key leak', null, null, { rounds: 1000 });
+      var flat = JSON.stringify(capsule);
+      expect(flat.indexOf('no key leak')).to.be(-1);
+      done();
+    }())})
+
+    it('blocks tampered ciphertext', function(done){(async function(){
+      var capsule = await SEA.timelock('secret', null, null, { rounds: 1000 });
+      var tampered = Object.assign({}, capsule, { c: capsule.c.slice(0, 10) + capsule.c.slice(11) });
+      expect(await SEA.timelock.unlock(tampered)).to.be(undefined);
+      done();
+    }())})
+
+    it('blocks capsules with the wrong seed', function(done){(async function(){
+      var capsule = await SEA.timelock('secret', null, null, { rounds: 1000 });
+      var wrong = Object.assign({}, capsule, { seed: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' });
+      expect(await SEA.timelock.unlock(wrong)).to.be(undefined);
+      done();
+    }())})
+
+    it('signs metadata and blocks forged metadata', function(done){(async function(){
+      var alice = await SEA.pair();
+      var capsule = await SEA.timelock('signed', alice, null, { rounds: 1000 });
+      expect(capsule.sig).to.be.ok();
+      expect(capsule.pub).to.be(alice.pub);
+      expect(await SEA.timelock.unlock(capsule)).to.be('signed');
+      var forged = Object.assign({}, capsule, { until: 1 });
+      expect(await SEA.timelock.unlock(forged)).to.be(undefined);
+      done();
+    }())})
+
+    it('enforces opt.max as an anti-DoS guard', function(done){(async function(){
+      var capsule = await SEA.timelock('secret', null, null, { rounds: 1000 });
+      expect(await SEA.timelock.unlock(capsule, null, { max: 100 })).to.be(undefined);
+      expect(await SEA.timelock.unlock(capsule, null, { max: 10000 })).to.be('secret');
+      done();
+    }())})
+
+    it('supports callback style', function(done){
+      SEA.timelock('cb lock', null, function(capsule){
+      SEA.timelock.unlock(capsule, function(data){
+      expect(data).to.be('cb lock');
+      done();
+      });}, { rounds: 1000 });
+    })
+  });
+
   describe('SEA.role', function() {
     it('grants and verifies a role token', function(done){(async function(){
       var admin = await SEA.pair();
@@ -830,29 +995,4 @@ describe('SEA', function(){
       done();
     }())})
   });
-
-  describe.skip('Frozen', function () {
-    it('Across spaces', function(done){
-      var gun = Gun();
-      var user = gun.user();
-
-      user.create('alice/as', 'password');
-      
-      gun.on('auth', async function(){
-
-        user.put({name: "Alice", country: "USA"});
-
-        var data = "hello world";
-        var hash = await SEA.work(data, null, null, {name: "SHA-256"});
-        gun.get('#users').get(hash).put(data);
-
-        console.log(1);
-        gun.get('#users').map()/*.get('country')*/.on(data => console.log(data));
-
-      });
-    });
-  });
-})
-
 }());
-
