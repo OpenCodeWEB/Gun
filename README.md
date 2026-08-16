@@ -4,6 +4,78 @@
 ![Build](https://github.com/amark/gun/actions/workflows/ci.yml/badge.svg)
 [![Gitter](https://img.shields.io/gitter/room/amark/gun.js.svg)](http://chat.gun.eco)
 
+---
+
+# OpenCodeWEB / Gun (ABsUP fork)
+
+> Production fork of [amark/gun](https://github.com/amark/gun) maintained by
+> **ABsUP / OpenCodeWEB** and used as the realtime graph backbone of the
+> [OpenCodeWEB OS](https://pocwu.pages.dev) platform. Tracks upstream `master`,
+> plus the feature work below.
+
+## Fork additions
+
+### SEA extensions (merged into `Dev`)
+
+Additional [SEA](https://gun.eco/docs/SEA) cryptography modules, split into
+standalone files under [`sea/`](sea/) and spliced into the [SEA bundle](sea.js):
+
+| Module | API | Description |
+| --- | --- | --- |
+| [`sea/share.js`](sea/share.js) | `SEA.share(data, sender, recipients, cb)` / `SEA.unshare(capsule, recipient, cb)` | Zero-knowledge multi-recipient encryption. Encrypts once for N recipients using per-recipient ECDH shared secrets; each recipient derives only their own key slot — they learn nothing about the other recipients' keys. |
+| [`sea/timelock.js`](sea/timelock.js) | `SEA.timelock(data, pair, cb)` / `SEA.timelock.unlock(capsule, cb)` | Time-locked encryption (proof-of-work delay) with a dead-man's switch. `unlock` solves a sequential hash-chain puzzle; the difficulty parameter `opt.w` makes the secret decryptable only after a target amount of compute. |
+| [`sea/role.js`](sea/role.js) | `SEA.role.grant(admin, userPub, role, cb)` / `SEA.role.verify(token, adminPub, cb)` / `SEA.role.has(token, role, userPub, adminPub, cb)` | Signed RBAC role tokens. An admin signs a role claim for a user's public key; any peer can verify the token without trusting the admin's relay. |
+
+### Yjs CRDT provider (`lib/yjs.js`, in development)
+
+[`gun/lib/yjs.js`](lib/yjs.js) is a self-contained Yjs provider: a Gun graph
+acts as **both** the network transport and the durable store for
+[Yjs](https://yjs.dev) CRDT documents. Clients own cumulative LWW slots
+(`yjs/<room>/c/<clientId>`) that are safe under Gun's per-key last-write-wins
+resolution, with `y-protocols` awareness states under `yjs/<room>/a/*`.
+
+```js
+const Gun = require('gun');
+require('gun/lib/yjs');                    // registers Gun.chain.yjs
+const Y = require('yjs');
+const { Awareness } = require('y-protocols/awareness');
+
+const gun = Gun();
+const doc = new Y.Doc();
+const provider = gun.yjs('room-name', doc, { awareness: new Awareness(doc) });
+
+provider.on('sync', synced => { /* initial sync complete */ });
+provider.on('status', ({status}) => { /* connecting | connected | disconnected */ });
+// ...
+provider.destroy();
+```
+
+> Status: **in development** — `npm run testyjs` passes 3 of 6 tests (sync,
+> update propagation, and cross-client convergence). Remaining work: precise
+> listener teardown on `destroy()`, awareness meta guards, and the in-process
+> cross-peer relay test. The module is optional and lazily requires `yjs`, so
+> Gun core stays dependency-free.
+
+### Serverless relay deployment
+
+The OpenCodeWEB production relay runs serverless on Cloudflare:
+[`gunx.pages.dev/gun`](https://gunx.pages.dev/gun) — a Workers Durable Object
+(SQLite) implementing the gun wire protocol, fronted by Pages Functions.
+Clients connect over `wss://` with no relay server to operate. Deploy source
+and tests live in the `Gun-serverless` project (workerd DO peer, raw-wire
+tests, cross-process relay tests).
+
+### Fork test suite
+
+In addition to upstream tests, the fork ships:
+
+- `npm run testsea` — SEA suite incl. the new `timelock` / `share` / `role`
+  modules (**58 passing / 1 pending**).
+- `npm run testyjs` — Yjs provider suite (`test/yjs/yjs.js`, **3 of 6 passing**,
+  in development).
+
+---
+
 **GUN** is an [ecosystem](https://gun.eco/docs/Ecosystem) of **tools** that let you build [community run](https://www.nbcnews.com/tech/tech-news/these-technologists-think-internet-broken-so-they-re-building-another-n1030136) and [encrypted applications](https://gun.eco/docs/Cartoon-Cryptography) - like an Open Source Firebase or a Decentralized Dropbox.
 
 The [Internet Archive](https://news.ycombinator.com/item?id=17685682) and [100s of other apps](https://github.com/amark/gun/wiki/awesome-gun) run GUN in-production.
@@ -218,6 +290,11 @@ I am missing many others, apologies, will be adding them soon! This list is infi
 ## Testing
 
 You will need to `npm install -g mocha` first. Then in the gun root folder run `npm test`. Tests will trigger persistent writes to the DB, so subsequent runs of the test will fail. You must clear the DB before running the tests again. This can be done by running `rm -rf *data*` command in the project directory.
+
+Fork test suites (no global mocha needed):
+
+ - `npm run testsea` — SEA suite incl. `SEA.timelock`, `SEA.share`/`unshare`, `SEA.role` (58 passing / 1 pending).
+ - `npm run testyjs` — Yjs CRDT provider (`lib/yjs.js`; 3 of 6 passing, in development). Requires dev deps `yjs` and `y-protocols`.
 
 ## Shims
 

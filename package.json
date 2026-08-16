@@ -19,7 +19,8 @@
     "minify": "uglifyjs gun.js -o gun.min.js -c -m",
     "unbuild": "node lib/unbuild.js & npm run minify",
     "unbuildSea": "node lib/unbuild.js sea",
-    "unbuildMeta": "node lib/unbuild.js lib/meta"
+    "unbuildMeta": "node lib/unbuild.js lib/meta",
+    "testyjs": "mocha test/yjs/yjs.js"
   },
   "repository": {
     "type": "git",
@@ -65,10 +66,12 @@
     "@peculiar/webcrypto": "^1.1.1"
   },
   "devDependencies": {
-    "mocha": "^6.2.0",
-    "ip": "^1.1.5",
     "aws-sdk": "^2.528.0",
     "emailjs": "^2.2.0",
-    "uglify-js": "^3.6.0"
+    "ip": "^1.1.5",
+    "mocha": "^6.2.0",
+    "uglify-js": "^3.6.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
   }
 }
