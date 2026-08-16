@@ -71,9 +71,28 @@ provider.destroy();
 The OpenCodeWEB production relay runs serverless on Cloudflare:
 [`gunx.pages.dev/gun`](https://gunx.pages.dev/gun) — a Workers Durable Object
 (SQLite) implementing the gun wire protocol, fronted by Pages Functions.
-Clients connect over `wss://` with no relay server to operate. Deploy source
-and tests live in the `Gun-serverless` project (workerd DO peer, raw-wire
-tests, cross-process relay tests).
+Clients connect over `wss://` with no relay server to operate. The project —
+relay source, client SDK, playground, and tests — lives in the
+[`OpenCodeWEB/GunX`](https://github.com/OpenCodeWEB/GunX) repository.
+
+This fork bundles the SDK at `lib/gunx.js` so it can be used directly:
+
+```js
+const Gun = require('gun');          // this fork
+const GunX = require('gun/lib/gunx'); // bundled GunX SDK
+
+const gunx = GunX({ appKey: 'my-app' });
+gunx.on('status', ({ status }) => console.log('relay:', status));
+gunx.get('todos').once(console.log);
+gunx.put('todos', { hello: 'world' });
+```
+
+The SDK adds app-namespacing (souls are stored as `appKey/soul` on the shared
+relay), an auto-refresh loop that fixes the browser IndexedDB re-ask gap
+(`lib/wsproto.js` clients only hash-check peers at connect time), SEA pair
+helpers, and status events. The relay itself materializes parent "lexicon"
+nodes on every put — gun sends only leaf nodes on the wire, so without this
+`.map()` on a parent soul would never see children.
 
 ### Fork test suite
 
