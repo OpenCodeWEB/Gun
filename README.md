@@ -13,6 +13,16 @@
 > [OpenCodeWEB OS](https://pocwu.pages.dev) platform. Tracks upstream `master`,
 > plus the feature work below.
 
+### Contributors
+
+- **ABsUP** — fork maintainer & lead contributor: SEA extensions
+  (`SEA.share`/`unshare`, `SEA.timelock`, `SEA.role`), the Yjs CRDT provider
+  (`lib/yjs.js`), the serverless gunx relay deployment, and the fork test
+  suites. [github.com/ABsUP](https://github.com/ABsUP)
+
+> GitHub's contributor graph for this repo is generated automatically from
+> commit authors.
+
 ## Fork additions
 
 ### SEA extensions (merged into `Dev`)
